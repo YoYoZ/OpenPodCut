@@ -2,8 +2,6 @@
 
 A free, open-source Adobe Premiere Pro extension that automatically cuts multicam podcast recordings based on speaker activity — no subscription required.
 
-> **Replaces AutoPod.** Same idea, open code, zero cost.
-
 ---
 
 ## What it does
