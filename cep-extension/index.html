@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OpenPodCut</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 12px;
+    background: #1c1c1c;
+    color: #d4d4d4;
+    padding: 12px;
+    user-select: none;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e8e8e8;
+    margin-bottom: 12px;
+    letter-spacing: 0.03em;
+  }
+
+  .section {
+    margin-bottom: 14px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #888;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #2e2e2e;
+  }
+
+  /* Sub-group label within Settings */
+  .setting-group-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #505050;
+    margin: 10px 0 5px;
+    padding-top: 8px;
+    border-top: 1px solid #252525;
+  }
+
+  /* Pill selector */
+  .pill-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .pill {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    border: 1px solid #3a3a3a;
+    background: #252525;
+    color: #bbb;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.1s;
+    padding: 0;
+  }
+
+  .pill:hover { background: #2e2e2e; color: #e0e0e0; }
+  .pill.active {
+    background: #0b6dc7;
+    border-color: #0b6dc7;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* Mapping rows */
+  .mapping-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+
+  .mapping-label {
+    width: 72px;
+    color: #aaa;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .mapping-label span {
+    display: inline-block;
+    background: #2e2e2e;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-weight: 600;
+    color: #ccc;
+  }
+
+  select {
+    flex: 1;
+    height: 24px;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-size: 11px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  select:focus { border-color: #0b6dc7; }
+
+  /* Setting rows */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 7px;
+    gap: 8px;
+  }
+
+  .setting-row label {
+    flex: 1;
+    color: #aaa;
+    font-size: 11px;
+  }
+
+  .setting-row input[type=number] {
+    width: 58px;
+    height: 24px;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-size: 11px;
+    outline: none;
+    text-align: right;
+  }
+
+  .setting-row input[type=number]:focus { border-color: #0b6dc7; }
+
+  .setting-row input[type=number]:disabled {
+    color: #555;
+    border-color: #2e2e2e;
+    cursor: default;
+  }
+
+  .setting-toggle {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #0b6dc7;
+    cursor: pointer;
+  }
+
+  .setting-row input[type=range] {
+    flex: 1;
+    accent-color: #0b6dc7;
+  }
+
+  .range-val {
+    width: 32px;
+    text-align: right;
+    color: #aaa;
+    font-size: 11px;
+  }
+
+  /* Unit labels (sec, dB, %) */
+  .unit {
+    color: #555;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Camera → Speaker(s) toggle buttons */
+  .cam-assign-btn {
+    height: 22px;
+    min-width: 22px;
+    padding: 0 5px;
+    border: 1px solid #3a3a3a;
+    background: #252525;
+    color: #666;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.1s;
+    flex-shrink: 0;
+  }
+  .cam-assign-btn:hover { background: #2e2e2e; color: #bbb; }
+  .cam-assign-btn.active {
+    background: #0b6dc7;
+    border-color: #0b6dc7;
+    color: #fff;
+  }
+  .cam-assign-btn.wide-btn.active {
+    background: #2e6644;
+    border-color: #3a8055;
+    color: #8ec86a;
+  }
+  .cam-assign-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    flex: 1;
+  }
+
+  /* Mode badge inside a label, e.g. "XML" or "Premiere" */
+  .mode-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #0b6dc7;
+    background: rgba(11,109,199,0.15);
+    border-radius: 3px;
+    padding: 1px 4px;
+    vertical-align: middle;
+  }
+
+  /* Dim and block interaction on rows that don't apply to the current mode */
+  [data-requires-mode].mode-locked {
+    opacity: 0.28;
+    pointer-events: none;
+  }
+
+  /* Run button */
+  #btn-run {
+    width: 100%;
+    height: 32px;
+    background: #0b6dc7;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 4px;
+  }
+
+  #btn-run:hover { background: #0d7fe0; }
+  #btn-run:active { background: #0960af; }
+  #btn-run:disabled { background: #333; color: #666; cursor: default; }
+
+  /* Mode description */
+  #mode-desc {
+    font-size: 10px;
+    color: #5a5a5a;
+    margin-top: 6px;
+    line-height: 1.45;
+  }
+
+  /* Reload tracks button */
+  #btn-reload {
+    width: 100%;
+    height: 24px;
+    background: #2a2a2a;
+    color: #999;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+
+  #btn-reload:hover { background: #333; color: #bbb; }
+
+  /* Status log */
+  #log-wrap {
+    margin-top: 10px;
+    display: none;
+    position: relative;
+  }
+  #log-wrap.visible { display: block; }
+
+  #log {
+    padding: 7px 8px;
+    background: #141414;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    min-height: 36px;
+    max-height: 160px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #888;
+    user-select: text;
+    cursor: text;
+    font-family: "Consolas", "Courier New", monospace;
+  }
+
+  #log .err  { color: #e06c6c; }
+  #log .ok   { color: #8ec86a; }
+  #log .info { color: #9ab0d0; }
+
+  #btn-copy-log {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    height: 18px;
+    padding: 0 6px;
+    background: #2a2a2a;
+    color: #777;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    font-size: 9px;
+    cursor: pointer;
+    z-index: 1;
+  }
+  #btn-copy-log:hover { background: #333; color: #bbb; }
+
+  .spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid #444;
+    border-top-color: #0b6dc7;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Speaker name input */
+  .speaker-name-input {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-size: 11px;
+    outline: none;
+  }
+  .speaker-name-input:focus  { border-color: #0b6dc7; }
+  .speaker-name-input::placeholder { color: #484848; font-style: italic; }
+
+  /* Indeterminate progress bar */
+  #progress-bar {
+    display: none;
+    height: 2px;
+    background: #2a2a2a;
+    border-radius: 1px;
+    overflow: hidden;
+    margin: 5px 0 2px;
+  }
+  #progress-bar.active { display: block; }
+  #progress-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: 35%;
+    background: #0b6dc7;
+    border-radius: 1px;
+    animation: indeterminate 1.3s ease-in-out infinite;
+  }
+  @keyframes indeterminate {
+    0%   { transform: translateX(-200%); }
+    100% { transform: translateX(420%); }
+  }
+</style>
+</head>
+<body>
+
+<h2>✂️ OpenPodCut</h2>
+
+<!-- Setup -->
+<div class="section">
+  <div class="section-title">Setup</div>
+
+  <div class="setting-row" style="margin-bottom:10px">
+    <label>Speakers</label>
+    <div class="pill-group" id="pills-speakers">
+      <button class="pill active" data-val="1">1</button>
+      <button class="pill" data-val="2">2</button>
+      <button class="pill" data-val="3">3</button>
+      <button class="pill" data-val="4">4</button>
+      <button class="pill" data-val="5">5</button>
+      <button class="pill" data-val="6">6</button>
+      <button class="pill" data-val="7">7</button>
+      <button class="pill" data-val="8">8</button>
+      <button class="pill" data-val="9">9</button>
+      <button class="pill" data-val="10">10</button>
+    </div>
+  </div>
+
+  <div class="setting-row">
+    <label>Cameras</label>
+    <div class="pill-group" id="pills-cameras">
+      <button class="pill" data-val="1">1</button>
+      <button class="pill active" data-val="2">2</button>
+      <button class="pill" data-val="3">3</button>
+      <button class="pill" data-val="4">4</button>
+      <button class="pill" data-val="5">5</button>
+      <button class="pill" data-val="6">6</button>
+      <button class="pill" data-val="7">7</button>
+      <button class="pill" data-val="8">8</button>
+      <button class="pill" data-val="9">9</button>
+      <button class="pill" data-val="10">10</button>
+    </div>
+  </div>
+</div>
+
+<!-- Speaker → Audio track -->
+<div class="section" id="section-speakers">
+  <div class="section-title">Speaker → Audio track</div>
+  <button id="btn-reload">↻ Reload tracks from Premiere</button>
+  <div id="speaker-rows"></div>
+</div>
+
+<!-- Camera → Speaker -->
+<div class="section" id="section-cameras">
+  <div class="section-title">Camera → Speaker</div>
+  <div id="camera-rows"></div>
+</div>
+
+<!-- Settings (grouped) -->
+<div class="section">
+  <div class="section-title">Settings</div>
+
+  <!-- ── Cuts ──────────────────────────────────────────────────── -->
+  <div class="setting-group-label">Cuts</div>
+
+  <div class="setting-row">
+    <label title="Minimum time to stay on any camera before another cut is allowed (post-cut cooldown).">Min shot duration</label>
+    <input type="number" id="setting-min-shot" value="2.0" min="0.5" max="10" step="0.5">
+    <span class="unit">sec</span>
+  </div>
+
+  <div class="setting-row">
+    <label title="L-cut: stay on the outgoing speaker this many seconds after the cut point — lets the reaction or breath land before switching. Pairs with J-cut below.">L-cut — linger</label>
+    <input type="number" id="setting-cut-delay" value="0" min="0" max="1" step="0.05">
+    <span class="unit">sec</span>
+  </div>
+
+  <div class="setting-row">
+    <label title="J-cut: show the incoming speaker this many seconds before they start talking — builds anticipation. Pairs with L-cut above.">J-cut — lead in</label>
+    <input type="number" id="setting-jcut" value="0" min="0" max="1" step="0.05">
+    <span class="unit">sec</span>
+  </div>
+
+  <!-- ── Wide Shot ───────────────────────────────────────────────── -->
+  <div class="setting-group-label">Wide Shot</div>
+
+  <div class="setting-row">
+    <input type="checkbox" id="setting-max-shot-enabled" class="setting-toggle"
+           title="Enable periodic wide-shot roll checks">
+    <label for="setting-max-shot-enabled"
+           title="Average interval between wide-shot roll checks. Higher = rarer opportunities."
+           style="cursor:pointer;">Check every</label>
+    <input type="number" id="setting-max-shot" value="8.0" min="1" max="30" step="0.5" disabled>
+    <span class="unit">sec</span>
+  </div>
+
+  <div class="setting-row">
+    <label title="Probability of inserting a wide shot each time the timer fires.">Frequency</label>
+    <input type="range" id="setting-wide-freq" min="0" max="40" value="15">
+    <span class="range-val" id="wide-freq-val">15%</span>
+  </div>
+
+  <!-- ── Detection ──────────────────────────────────────────────── -->
+  <div class="setting-group-label">Detection</div>
+
+  <div class="setting-row">
+    <label title="Speech shorter than this is ignored — filters out 'hmm', breath, mic noise.">Min phrase duration</label>
+    <input type="number" id="setting-min-phrase" value="1.5" min="0.2" max="5" step="0.1">
+    <span class="unit">sec</span>
+  </div>
+
+  <div class="setting-row">
+    <label title="Cross-channel dominance filter: suppress mic bleed more than this many dB below the loudest mic. Lower = more aggressive bleed removal.">Mic bleed filter</label>
+    <input type="number" id="setting-dominance-db" value="12" min="0" max="30" step="1">
+    <span class="unit">dB</span>
+  </div>
+
+  <!-- ── Cleanup ────────────────────────────────────────────────── -->
+  <div class="setting-group-label">Cleanup</div>
+
+  <div class="setting-row">
+    <input type="checkbox" id="setting-snap-enabled" class="setting-toggle"
+           title="Nudge each cut boundary ±50ms to the nearest audio zero-crossing to avoid clicks">
+    <label for="setting-snap-enabled"
+           title="Shifts each cut by up to ±50ms to land on a zero-crossing in the audio waveform, eliminating clicks and breath-cut artefacts."
+           style="cursor:pointer;">Snap cuts to zero crossing</label>
+  </div>
+
+  <div class="setting-row" data-requires-mode="xml">
+    <input type="checkbox" id="setting-silence-enabled" class="setting-toggle"
+           title="Remove silent gaps — only available in XML mode">
+    <label for="setting-silence-enabled" style="cursor:pointer;">
+      Remove silences &gt; <span class="mode-badge">XML</span>
+    </label>
+    <input type="number" id="setting-min-silence" value="2.0" min="0.5" max="30" step="0.5" disabled>
+    <span class="unit">sec</span>
+  </div>
+
+  <!-- ── Finishing ──────────────────────────────────────────────── -->
+  <div class="setting-group-label">Finishing</div>
+
+  <div class="setting-row" data-requires-mode="premiere">
+    <label title="After applying cuts, scale all enabled clips up by this percentage to punch in slightly and mask jarring transitions.">
+      Punch-in zoom <span class="mode-badge">Premiere</span>
+    </label>
+    <input type="number" id="setting-zoom-pct" value="0" min="0" max="20" step="1">
+    <span class="unit">%</span>
+  </div>
+
+  <div class="setting-row">
+    <label title="Add a sequence marker whenever the host speaker talks continuously for at least this many seconds. Set host with ★ in the speaker list above.">Chapter if host speaks ≥</label>
+    <input type="number" id="setting-chapter-sec" value="10" min="1" max="120" step="1">
+    <span class="unit">sec</span>
+  </div>
+</div>
+
+<!-- Presets -->
+<div class="section">
+  <div class="section-title">Presets</div>
+  <div class="setting-row" style="gap:4px;">
+    <input type="text" id="preset-name" placeholder="Preset name…"
+           style="flex:1;height:24px;background:#2a2a2a;color:#d0d0d0;border:1px solid #3a3a3a;
+                  border-radius:3px;padding:0 6px;font-size:11px;outline:none;">
+    <button id="btn-preset-save"
+            style="height:24px;padding:0 8px;background:#2a2a2a;color:#aaa;
+                   border:1px solid #3a3a3a;border-radius:3px;font-size:11px;cursor:pointer;white-space:nowrap;">Save</button>
+  </div>
+  <div class="setting-row" style="gap:4px;">
+    <select id="preset-select"
+            style="flex:1;height:24px;background:#2a2a2a;color:#d0d0d0;border:1px solid #3a3a3a;
+                   border-radius:3px;padding:0 6px;font-size:11px;outline:none;">
+      <option value="">— saved presets —</option>
+    </select>
+    <button id="btn-preset-load"
+            style="height:24px;padding:0 8px;background:#2a2a2a;color:#aaa;
+                   border:1px solid #3a3a3a;border-radius:3px;font-size:11px;cursor:pointer;">Load</button>
+    <button id="btn-preset-delete"
+            style="height:24px;padding:0 8px;background:#2a2a2a;color:#666;
+                   border:1px solid #3a3a3a;border-radius:3px;font-size:11px;cursor:pointer;">✕</button>
+  </div>
+</div>
+
+<!-- Output mode + action -->
+<div class="section">
+  <div class="section-title">Output Mode</div>
+  <div class="pill-group" id="pills-mode">
+    <button class="pill active" data-val="premiere">✂️ Premiere</button>
+    <button class="pill" data-val="xml">✂️ XML</button>
+  </div>
+  <div id="mode-desc">Applies cuts directly to the sequence. Best for short projects.</div>
+</div>
+
+<button id="btn-run">✂️ Cut</button>
+<div id="progress-bar"></div>
+<div id="log-wrap">
+  <button id="btn-copy-log" title="Copy log">Copy</button>
+  <div id="log"></div>
+</div>
+
+<script src="CSInterface.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

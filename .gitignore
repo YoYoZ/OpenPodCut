@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+.venv/
+venv/
+env/
+
+# PyInstaller build artifacts
+analyzer/build/
+analyzer/dist/
+analyzer/*.spec
+
+# Bundled analyzer binary (built locally — too large for git)
+cep-extension/bin/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# CEP debug
+.debug
+
+# Local Claude Code config
+.claude/
