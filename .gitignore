@@ -35,5 +35,10 @@ desktop.ini
 # CEP debug
 .debug
 
+# Signing — keep private key and p12 off GitHub
+install/selfsigned.key
+install/selfsigned.p12
+install/*.zxp
+
 # Local Claude Code config
 .claude/
