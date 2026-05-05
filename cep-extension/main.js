@@ -18,11 +18,14 @@ const { execFile } = require('child_process');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-// CEP's __filename starts with /C:/... — strip the leading slash before the drive letter
+// On Windows, CEP's pathname starts with /C:/... — strip the leading slash before the drive letter.
+// On macOS it's a normal Unix path, so no transformation needed.
+const isWin = process.platform === 'win32';
+const rawPathname = decodeURIComponent(window.location.pathname);
 const EXTENSION_ROOT = path.dirname(
-  decodeURIComponent(window.location.pathname).replace(/^\/([A-Za-z]:)/, '$1')
+  isWin ? rawPathname.replace(/^\/([A-Za-z]:)/, '$1') : rawPathname
 );
-const ANALYZER_EXE = path.join(EXTENSION_ROOT, 'bin', 'analyzer', 'analyzer.exe');
+const ANALYZER_EXE = path.join(EXTENSION_ROOT, 'bin', 'analyzer', isWin ? 'analyzer.exe' : 'analyzer');
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -1005,7 +1008,9 @@ async function runAnalysisPipeline(logFn) {
 
   if (!fs.existsSync(ANALYZER_EXE)) {
     throw new Error(
-      `analyzer.exe not found at: ${ANALYZER_EXE}\nBuild it first with analyzer/build.bat`
+      `Analyzer binary not found at: ${ANALYZER_EXE}\n` +
+      (isWin ? 'Build it first with analyzer/build.bat'
+              : 'Download the macOS release zip from GitHub releases.')
     );
   }
 
@@ -1044,7 +1049,7 @@ function runAnalyzer(configPath) {
       }
     });
 
-    proc.on('error', (e) => reject(new Error('Failed to start analyzer.exe: ' + e.message)));
+    proc.on('error', (e) => reject(new Error('Failed to start analyzer binary: ' + e.message)));
   });
 }
 
