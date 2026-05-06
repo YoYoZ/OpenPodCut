@@ -337,6 +337,8 @@ const PRESET_KEY = 'openpodcut_presets';
 
 function getPresetSettings() {
   return {
+    speakerCount:   state.speakerCount,
+    cameraCount:    state.cameraCount,
     minShot:        document.getElementById('setting-min-shot').value,
     maxShotEnabled: maxShotCheckbox.checked,
     maxShot:        maxShotInput.value,
@@ -371,6 +373,16 @@ function applyPresetSettings(s) {
   document.getElementById('setting-zoom-pct').value     = s.zoomPct     ?? 0;
   document.getElementById('setting-snap-enabled').checked = s.snapEnabled ?? false;
   document.getElementById('setting-chapter-sec').value  = s.chapterSec  ?? 10;
+
+  // Restore speaker / camera counts — click the matching pill to trigger full re-render
+  if (s.speakerCount) {
+    const p = document.querySelector(`#pills-speakers .pill[data-val="${s.speakerCount}"]`);
+    if (p) p.click();
+  }
+  if (s.cameraCount) {
+    const p = document.querySelector(`#pills-cameras .pill[data-val="${s.cameraCount}"]`);
+    if (p) p.click();
+  }
 
   // Restore output mode
   if (s.outputMode && (s.outputMode === 'premiere' || s.outputMode === 'xml')) {
