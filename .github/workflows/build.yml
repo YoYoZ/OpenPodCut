@@ -1,0 +1,162 @@
+name: Build Release
+
+on:
+  workflow_dispatch:   # trigger manually from the Actions tab at any time
+  push:
+    tags:
+      - 'v*'           # trigger automatically on version tags (e.g. v1.2.0)
+
+# Both jobs run in parallel and each uploads its zip to the same draft release.
+jobs:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: analyzer/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd analyzer
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build analyzer binary
+        shell: bash
+        run: |
+          cd analyzer
+          pyinstaller \
+            --onedir \
+            --noupx \
+            --noconfirm \
+            --name analyzer \
+            --distpath ../cep-extension/bin \
+            --workpath build/work \
+            --specpath build \
+            --collect-all silero_vad \
+            --collect-all torchaudio \
+            --collect-all soundfile \
+            --hidden-import torchaudio \
+            --hidden-import torchaudio.functional \
+            --hidden-import torchaudio.transforms \
+            --hidden-import soundfile \
+            analyzer.py
+
+      - name: Get version from manifest
+        id: version
+        shell: bash
+        run: |
+          VER=$(grep -o 'ExtensionBundleVersion="[^"]*"' cep-extension/CSXS/manifest.xml \
+               | grep -o '"[^"]*"' | tr -d '"')
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          $ver  = "${{ steps.version.outputs.version }}"
+          $stage = "stage-win"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item -Recurse cep-extension  "$stage/cep-extension"
+          New-Item -ItemType Directory -Path "$stage/install" | Out-Null
+          Copy-Item install/install.bat              "$stage/install/"
+          Copy-Item install/enable_debug_mode.bat    "$stage/install/"
+          Copy-Item README.md, LICENSE               "$stage/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "OpenPodCut-v${ver}-win.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenPodCut-win
+          path: "OpenPodCut-v${{ steps.version.outputs.version }}-win.zip"
+          retention-days: 14
+
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: "OpenPodCut-v${{ steps.version.outputs.version }}-win.zip"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-macos:
+    runs-on: macos-14   # Apple Silicon (M1)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: analyzer/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd analyzer
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build analyzer binary
+        run: |
+          cd analyzer
+          pyinstaller \
+            --onedir \
+            --noupx \
+            --noconfirm \
+            --name analyzer \
+            --distpath ../cep-extension/bin \
+            --workpath build/work \
+            --specpath build \
+            --collect-all silero_vad \
+            --collect-all torchaudio \
+            --collect-all soundfile \
+            --hidden-import torchaudio \
+            --hidden-import torchaudio.functional \
+            --hidden-import torchaudio.transforms \
+            --hidden-import soundfile \
+            analyzer.py
+
+      - name: Make binary executable
+        run: chmod +x cep-extension/bin/analyzer/analyzer
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VER=$(grep -o 'ExtensionBundleVersion="[^"]*"' cep-extension/CSXS/manifest.xml \
+               | grep -o '"[^"]*"' | tr -d '"')
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Package release zip
+        run: |
+          VER="${{ steps.version.outputs.version }}"
+          mkdir -p stage-mac/install
+          cp -r cep-extension stage-mac/
+          cp install/install.sh install/enable_debug_mode.sh stage-mac/install/
+          chmod +x stage-mac/install/install.sh stage-mac/install/enable_debug_mode.sh
+          cp README.md LICENSE stage-mac/
+          cd stage-mac && zip -r "../OpenPodCut-v${VER}-mac.zip" . && cd ..
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenPodCut-mac
+          path: "OpenPodCut-v${{ steps.version.outputs.version }}-mac.zip"
+          retention-days: 14
+
+      - name: Attach to draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: "OpenPodCut-v${{ steps.version.outputs.version }}-mac.zip"
