@@ -544,6 +544,8 @@ async function runXMLFlow(pipeline) {
     seqInfo.name,
     speakersForAnalyzer,
     silenceRemovals,
+    seqInfo.width  || 1920,
+    seqInfo.height || 1080,
   );
 
   const xmlPath = path.join(os.tmpdir(), 'openpodcut_edit_' + Date.now() + '.xml');
@@ -584,7 +586,9 @@ async function addChapterMarkersIfNeeded(pipeline) {
 // Produces one video track per camera — every cut appears on every track,
 // with <enabled>TRUE</enabled> on the active camera and FALSE on the rest.
 
-function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName, speakers, silenceRemovals) {
+function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName, speakers, silenceRemovals, width, height) {
+  width  = width  || 1920;
+  height = height || 1080;
   const isNTSC        = Math.abs(fps - Math.round(fps)) > 0.02;
   const timebase      = Math.round(fps);
   const ntsc          = isNTSC ? 'TRUE' : 'FALSE';
@@ -679,8 +683,8 @@ function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName,
       : `<video>
                       <samplecharacteristics>
                         ${rateXML}
-                        <width>1920</width>
-                        <height>1080</height>
+                        <width>${width}</width>
+                        <height>${height}</height>
                         <anamorphic>FALSE</anamorphic>
                         <pixelaspectratio>square</pixelaspectratio>
                         <fielddominance>none</fielddominance>
@@ -850,8 +854,8 @@ function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName,
         <format>
           <samplecharacteristics>
             ${rateXML}
-            <width>1920</width>
-            <height>1080</height>
+            <width>${width}</width>
+            <height>${height}</height>
             <anamorphic>FALSE</anamorphic>
             <pixelaspectratio>square</pixelaspectratio>
             <fielddominance>none</fielddominance>

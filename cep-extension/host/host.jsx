@@ -562,13 +562,20 @@ function getSequenceInfo() {
             durationSec = parseFloat(seq.end.ticks) / TICKS_PER_SEC;
         }
 
-        var fps = 0;
-        try { fps = Math.round(1 / seq.getSettings().videoFrameRate.seconds); } catch (e2) {}
+        var fps = 0, width = 1920, height = 1080;
+        try {
+            var settings = seq.getSettings();
+            fps    = Math.round(1 / settings.videoFrameRate.seconds);
+            width  = settings.videoFrameWidth  || 1920;
+            height = settings.videoFrameHeight || 1080;
+        } catch (e2) {}
 
         return ok({
             name: seq.name,
             duration: durationSec,
             fps: fps,
+            width: width,
+            height: height,
             audioTrackCount: seq.audioTracks.numTracks,
             videoTrackCount: seq.videoTracks.numTracks
         });

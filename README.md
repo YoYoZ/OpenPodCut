@@ -205,6 +205,14 @@ Issues and pull requests are welcome. A few notes:
 
 ---
 
+## Support the project
+
+OpenPodCut is free and always will be. If it saved you time or money, a coffee is always appreciated:
+
+[☕ Buy me a coffee](https://base.monobank.ua/4QTZuQ2Q8UfjJF)
+
+---
+
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE).
