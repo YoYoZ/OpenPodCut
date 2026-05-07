@@ -2,6 +2,8 @@
 
 A free, open-source Adobe Premiere Pro extension that automatically cuts multicam podcast recordings based on speaker activity — no subscription required.
 
+If it saves you time, [☕ buy me a coffee](https://base.monobank.ua/4QTZuQ2Q8UfjJF) — it keeps the project going.
+
 ---
 
 ## What it does
@@ -202,14 +204,6 @@ Issues and pull requests are welcome. A few notes:
 - Python logic lives in `analyzer/` — changes require a full `build.bat` rebuild since the `.py` source files are not read at runtime (PyInstaller bundles everything into the exe).
 - The CEP frontend (`index.html`, `main.js`, `host.jsx`) can be edited and tested without a rebuild — just reload the panel in Premiere.
 - To reload the panel without restarting Premiere: close and reopen it from **Window → Extensions**, or use the CEP debugger at `http://localhost:7777`.
-
----
-
-## Support the project
-
-OpenPodCut is free and always will be. If it saved you time or money, a coffee is always appreciated:
-
-[☕ Buy me a coffee](https://base.monobank.ua/4QTZuQ2Q8UfjJF)
 
 ---
 
