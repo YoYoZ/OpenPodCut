@@ -85,8 +85,12 @@ def _read_audio_16k_segment(audio_path: str,
 
     try:
         import torchaudio
-        meta = torchaudio.info(audio_path)
-        sr   = meta.sample_rate
+        # torchaudio.info() may be absent in some bundled builds — fall back to
+        # loading a single frame just to discover the sample rate.
+        try:
+            sr = torchaudio.info(audio_path).sample_rate
+        except AttributeError:
+            _, sr = torchaudio.load(audio_path, num_frames=1)
         frame_offset = int(start_sec * sr)
         num_frames   = int((end_sec - start_sec) * sr) if end_sec is not None else -1
         wav, _ = torchaudio.load(audio_path,
