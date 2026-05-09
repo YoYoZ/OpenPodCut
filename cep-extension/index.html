@@ -482,20 +482,20 @@
 
   <div style="margin-bottom:7px">
     <div style="font-size:11px;color:#aaa;margin-bottom:5px"
-         title="Cross-channel dominance filter: suppress mic bleed more than this many dB below the loudest mic. Higher = more aggressive bleed removal.">
+         title="Cross-channel dominance filter: suppress mic bleed more than this many dB below the loudest mic. Lower value = more aggressive. Off = disabled. Lav = tuned for lavalier mics.">
       Mic bleed filter
     </div>
     <div class="pill-group" id="pills-dominance">
-      <button class="pill"        data-val="0">Off</button>
-      <button class="pill"        data-val="8">Light</button>
+      <button class="pill"        data-val="60">Off</button>
+      <button class="pill"        data-val="20">Subtle</button>
       <button class="pill active" data-val="12">Medium</button>
-      <button class="pill"        data-val="20">Strong</button>
+      <button class="pill"        data-val="5">Lav</button>
       <button class="pill"        data-val="custom">Custom</button>
     </div>
   </div>
   <div id="dominance-custom-wrap" class="setting-row" style="display:none;margin-top:-3px">
-    <label style="color:#666;font-size:10px">Custom value</label>
-    <input type="number" id="setting-dominance-db" value="12" min="0" max="60" step="1">
+    <label style="color:#666;font-size:10px">Custom (lower = stronger)</label>
+    <input type="number" id="setting-dominance-db" value="12" min="1" max="60" step="1">
     <span class="unit">dB</span>
   </div>
 
