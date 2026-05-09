@@ -316,6 +316,27 @@ wideRange.addEventListener('input', () => {
   wideVal.textContent = wideRange.value + '%';
 });
 
+// ─── Mic bleed filter pill group ─────────────────────────────────────────────
+
+document.getElementById('pills-dominance').querySelectorAll('.pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('pills-dominance').querySelectorAll('.pill')
+      .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('dominance-custom-wrap').style.display =
+      btn.dataset.val === 'custom' ? 'flex' : 'none';
+  });
+});
+
+function getDominanceDb() {
+  const active = document.querySelector('#pills-dominance .pill.active');
+  if (!active) return 12;
+  if (active.dataset.val === 'custom') {
+    return parseFloat(document.getElementById('setting-dominance-db').value) || 0;
+  }
+  return parseFloat(active.dataset.val);
+}
+
 // ─── Max-shot checkbox toggle ─────────────────────────────────────────────────
 
 const maxShotCheckbox = document.getElementById('setting-max-shot-enabled');
@@ -348,7 +369,8 @@ function getPresetSettings() {
     jCut:           document.getElementById('setting-jcut').value,
     silenceEnabled: silenceCheckbox.checked,
     minSilence:     silenceInput.value,
-    dominanceDb:    document.getElementById('setting-dominance-db').value,
+    dominanceDb:    getDominanceDb(),
+    dominancePill:  (document.querySelector('#pills-dominance .pill.active') || {}).dataset?.val ?? '12',
     zoomPct:        document.getElementById('setting-zoom-pct').value,
     snapEnabled:    document.getElementById('setting-snap-enabled').checked,
     chapterSec:     document.getElementById('setting-chapter-sec').value,
@@ -369,7 +391,22 @@ function applyPresetSettings(s) {
   silenceCheckbox.checked  = s.silenceEnabled ?? false;
   silenceInput.disabled    = !silenceCheckbox.checked;
   silenceInput.value       = s.minSilence     ?? 2.0;
-  document.getElementById('setting-dominance-db').value = s.dominanceDb ?? 12;
+  // Restore mic bleed filter (new pill format, with legacy numeric fallback)
+  {
+    const targetPill = s.dominancePill ?? String(s.dominanceDb ?? 12);
+    const pill = document.querySelector(`#pills-dominance .pill[data-val="${targetPill}"]`);
+    if (pill) {
+      pill.click();
+      if (targetPill === 'custom') {
+        document.getElementById('setting-dominance-db').value = s.dominanceDb ?? 12;
+      }
+    } else {
+      // Value doesn't match any preset — activate Custom and populate the field
+      const customPill = document.querySelector('#pills-dominance .pill[data-val="custom"]');
+      if (customPill) customPill.click();
+      document.getElementById('setting-dominance-db').value = s.dominanceDb ?? 12;
+    }
+  }
   document.getElementById('setting-zoom-pct').value     = s.zoomPct     ?? 0;
   document.getElementById('setting-snap-enabled').checked = s.snapEnabled ?? false;
   document.getElementById('setting-chapter-sec').value  = s.chapterSec  ?? 10;
@@ -1010,7 +1047,7 @@ async function runAnalysisPipeline(logFn) {
                         - parseFloat(document.getElementById('setting-jcut').value),
       vad_threshold:      0.45,
       min_silence_sec:    silenceActive ? parseFloat(silenceInput.value) : 0,
-      dominance_db:       parseFloat(document.getElementById('setting-dominance-db').value),
+      dominance_db:       getDominanceDb(),
       snap_zero_crossing: document.getElementById('setting-snap-enabled').checked,
       host_speaker_id:    state.hostSpeakerId,
       chapter_min_sec:    parseFloat(document.getElementById('setting-chapter-sec').value),
