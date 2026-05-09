@@ -57,16 +57,40 @@ def load_model():
 
 # ─── Low-level audio I/O ─────────────────────────────────────────────────────
 
+def _find_ffmpeg() -> str | None:
+    """
+    Locate an ffmpeg binary.
+    Search order: system PATH → imageio_ffmpeg bundle (ships a static binary).
+    """
+    import shutil
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    return None
+
+
 def _read_audio_16k_segment(audio_path: str,
                              start_sec: float = 0.0,
                              end_sec: float | None = None):
     """
     Load a time slice at 16 kHz mono float32.
-    Falls back from soundfile (audio files) → torchaudio (video containers).
+
+    Strategy:
+      1. soundfile  — pure audio files (WAV, FLAC, AIFF, MP3 …)
+      2. ffmpeg     — video containers (MP4, MXF, MOV …)
+                      Uses imageio_ffmpeg's bundled binary so no system
+                      ffmpeg install is required.
+    This avoids depending on torchaudio's backend, which changed
+    incompatibly in 2.6 (dropped ffmpeg, requires TorchCodec).
     """
     import torch
-    import torchaudio.functional as F_audio
 
+    # ── soundfile (fast, seeks natively) ─────────────────────────────────────
     try:
         import soundfile as sf
         info = sf.info(audio_path)
@@ -75,31 +99,37 @@ def _read_audio_16k_segment(audio_path: str,
         stop_frame  = int(end_sec * sr) if end_sec is not None else None
         data, _ = sf.read(audio_path, start=start_frame, stop=stop_frame,
                           dtype="float32", always_2d=True)
-        wav = torch.from_numpy(
-            data.mean(axis=1) if data.shape[1] > 1 else data[:, 0])
+        wav = data.mean(axis=1) if data.shape[1] > 1 else data[:, 0]
         if sr != 16000:
-            wav = F_audio.resample(wav, sr, 16000)
-        return wav
+            import torchaudio.functional as F_audio
+            wav = F_audio.resample(torch.from_numpy(wav), sr, 16000).numpy()
+        return torch.from_numpy(wav)
     except Exception:
         pass
 
+    # ── ffmpeg (MP4, MXF, MOV, and any other video container) ────────────────
     try:
-        import torchaudio
-        # torchaudio.info() may be absent in some bundled builds — fall back to
-        # loading a single frame just to discover the sample rate.
-        try:
-            sr = torchaudio.info(audio_path).sample_rate
-        except AttributeError:
-            _, sr = torchaudio.load(audio_path, num_frames=1)
-        frame_offset = int(start_sec * sr)
-        num_frames   = int((end_sec - start_sec) * sr) if end_sec is not None else -1
-        wav, _ = torchaudio.load(audio_path,
-                                 frame_offset=frame_offset,
-                                 num_frames=num_frames)
-        wav = wav.mean(dim=0) if wav.shape[0] > 1 else wav[0]
-        if sr != 16000:
-            wav = F_audio.resample(wav, sr, 16000)
-        return wav
+        import subprocess, io
+        import soundfile as sf
+
+        ffmpeg = _find_ffmpeg()
+        if not ffmpeg:
+            raise RuntimeError(
+                "ffmpeg not found. Install imageio-ffmpeg: pip install imageio-ffmpeg")
+
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error",
+               "-ss", str(start_sec), "-i", audio_path]
+        if end_sec is not None:
+            cmd += ["-t", str(max(0.0, end_sec - start_sec))]
+        cmd += ["-ac", "1", "-ar", "16000", "-f", "wav", "pipe:1"]
+
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0 or len(result.stdout) < 44:  # 44 = WAV header
+            raise RuntimeError(
+                f"ffmpeg failed: {result.stderr.decode(errors='replace')}")
+
+        data, _ = sf.read(io.BytesIO(result.stdout), dtype="float32", always_2d=True)
+        return torch.from_numpy(data[:, 0])
     except Exception as e:
         raise RuntimeError(f"Cannot read audio from '{audio_path}': {e}")
 

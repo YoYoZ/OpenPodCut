@@ -24,10 +24,12 @@ pyinstaller ^
     --collect-all silero_vad ^
     --collect-all torchaudio ^
     --collect-all soundfile ^
+    --collect-all imageio_ffmpeg ^
     --hidden-import torchaudio ^
     --hidden-import torchaudio.functional ^
     --hidden-import torchaudio.transforms ^
     --hidden-import soundfile ^
+    --hidden-import imageio_ffmpeg ^
     analyzer.py
 
 if not exist "..\cep-extension\bin\analyzer\analyzer.exe" (
