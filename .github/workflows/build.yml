@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*'           # trigger automatically on version tags (e.g. v1.2.0)
 
+permissions:
+  contents: write      # required to create/update GitHub releases
+
 # Both jobs run in parallel and each uploads its zip to the same draft release.
 jobs:
 
@@ -15,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -75,7 +78,7 @@ jobs:
           Compress-Archive -Path "$stage/*" -DestinationPath "OpenPodCut-v${ver}-win.zip"
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: OpenPodCut-win
           path: "OpenPodCut-v${{ steps.version.outputs.version }}-win.zip"
@@ -94,10 +97,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -152,7 +155,7 @@ jobs:
           cd stage-mac && zip -r "../OpenPodCut-v${VER}-mac.zip" . && cd ..
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: OpenPodCut-mac
           path: "OpenPodCut-v${{ steps.version.outputs.version }}-mac.zip"
