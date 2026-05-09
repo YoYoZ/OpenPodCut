@@ -221,7 +221,10 @@ def generate_cuts(
                         idx = min(shared_indices)
                         desired = next((c for c in cameras if c.index == idx), current_cam)
                 else:
-                    desired = pick_wide() if wide_cameras else current_cam
+                    # Only use wide as simultaneous-speech fallback when wide shots
+                    # are actually enabled (frequency > 0). If the user disabled wide
+                    # shots entirely, stay on the current camera instead.
+                    desired = pick_wide() if can_do_wide else current_cam
 
         # ── Commit cut when desired changes and cooldown elapsed ──────────────
         if desired.index != current_cam.index and cool_down == 0:
