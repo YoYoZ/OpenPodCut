@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <ExtensionManifest Version="7.0" ExtensionBundleId="com.podcastcutter.panel"
-                   ExtensionBundleVersion="1.2.2" ExtensionBundleName="OpenPodCut">
+                   ExtensionBundleVersion="1.2.3" ExtensionBundleName="OpenPodCut">
 
   <ExtensionList>
     <Extension Id="com.podcastcutter.panel.main" Version="1.0.0"/>
