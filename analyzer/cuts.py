@@ -56,6 +56,101 @@ class Cut:
     camera_index: int
 
 
+def _generate_random_multicam_cuts(
+    speakers: list[Speaker],
+    cameras:  list[Camera],
+    config:   CutConfig,
+    duration: float,
+) -> list[Cut]:
+    """
+    Random multi-camera mode: used when every camera is a 'wide/group' shot
+    with no speaker assignment.  All cameras are treated as equivalent angles.
+
+    Cut strategy:
+      • Speech resumes after a silence  →  always cut (subject to min_shot_sec cooldown)
+      • Long continuous speech           →  periodic roll every ~max_shot_sec seconds,
+                                           with wide_frequency as the switch probability
+
+    Camera selection: always pick a different camera from the current one,
+    chosen uniformly at random.
+    """
+    res        = config.resolution
+    n_frames   = int(np.ceil(duration / res))
+    min_frames = int(config.min_shot_sec / res)
+    roll_base  = int((config.max_shot_sec or 8.0) / res)
+
+    cam_indices = [c.index for c in cameras]
+    rng         = random.Random(42)
+
+    def pick_different(current_idx: int) -> int:
+        others = [i for i in cam_indices if i != current_idx]
+        return rng.choice(others) if others else current_idx
+
+    def next_roll_delay() -> int:
+        jitter = max(1, int(roll_base * 0.4))
+        return roll_base + rng.randint(-jitter, jitter)
+
+    # Combined "any speaker active" boolean array
+    combined = np.zeros(n_frames, dtype=bool)
+    for spk in speakers:
+        arr = spk.activity
+        if len(arr) < n_frames:
+            arr = np.concatenate([arr, np.zeros(n_frames - len(arr), dtype=bool)])
+        combined |= arr[:n_frames]
+
+    cuts:          list[Cut] = []
+    current_idx:   int       = rng.choice(cam_indices)
+    current_start: float     = 0.0
+    cool_down:     int       = 0
+    roll_timer:    int       = next_roll_delay()
+    prev_speech:   bool      = False
+
+    for f in range(n_frames):
+        speech_now = bool(combined[f])
+        if cool_down > 0:
+            cool_down -= 1
+
+        roll_fired  = False
+        roll_timer -= 1
+        if roll_timer <= 0:
+            roll_fired = True
+            roll_timer = next_roll_delay()
+
+        do_cut = False
+
+        # Primary cut point: speech resumes after a silence
+        if speech_now and not prev_speech and cool_down == 0:
+            do_cut = True
+
+        # Secondary cut point: periodic roll during continuous speech
+        elif (roll_fired
+              and speech_now
+              and cool_down == 0
+              and config.wide_frequency > 0
+              and rng.random() < config.wide_frequency):
+            do_cut = True
+
+        if do_cut and len(cam_indices) > 1:
+            t = round(f * res, 3)
+            cuts.append(Cut(
+                start=round(current_start, 3),
+                end=t,
+                camera_index=current_idx,
+            ))
+            current_idx   = pick_different(current_idx)
+            current_start = t
+            cool_down     = min_frames
+
+        prev_speech = speech_now
+
+    cuts.append(Cut(
+        start=round(current_start, 3),
+        end=round(duration, 3),
+        camera_index=current_idx,
+    ))
+    return [c for c in cuts if c.end > c.start]
+
+
 def generate_cuts(
     speakers: list[Speaker],
     cameras:  list[Camera],
@@ -92,6 +187,26 @@ def generate_cuts(
 
     wide_indices    = {c.index for c in wide_cameras}
     fallback_camera = cameras[0] if cameras else Camera(index=1, speaker_id=None)
+
+    # ── Random multicam mode ──────────────────────────────────────────────────
+    # When every camera is a "wide/group" shot (no speaker assignments), skip
+    # the speaker-follow logic and randomise between cameras on speech
+    # transitions and periodic rolls.
+    if not speaker_cameras:
+        cuts = _generate_random_multicam_cuts(speakers, cameras, config, duration)
+        if config.cut_delay_sec != 0 and len(cuts) > 1:
+            d        = config.cut_delay_sec
+            adjusted = []
+            for i, cut in enumerate(cuts):
+                new_start = round(cut.start + d, 3) if i > 0             else cut.start
+                new_end   = round(cut.end   + d, 3) if i < len(cuts) - 1 else cut.end
+                new_start = max(0.0, min(new_start, duration))
+                new_end   = max(0.0, min(new_end,   duration))
+                if new_end > new_start:
+                    adjusted.append(Cut(start=new_start, end=new_end,
+                                        camera_index=cut.camera_index))
+            cuts = adjusted
+        return cuts
 
     # Track which speakers are assigned to each camera index so we can prefer
     # dedicated cameras (sole-speaker) over shared/tandem cameras when picking.
