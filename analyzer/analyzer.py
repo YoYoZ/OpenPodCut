@@ -237,12 +237,33 @@ def run(config_path: str) -> dict:
             if not os.path.exists(clip["path"]):
                 raise FileNotFoundError(f"Media file not found: {clip['path']}")
 
+    # Deduplicate speakers that share identical clip lists — avoids running VAD
+    # twice on the same audio file (e.g. two speakers assigned to the same track).
+    def _clip_key(clips):
+        return tuple((c["path"], round(c["seq_start"], 3), round(c["seq_end"], 3))
+                     for c in clips)
+
+    unique_spk_configs = []
+    spk_alias: dict[str, str] = {}   # duplicate id → id of the speaker to reuse
+    seen_keys:  dict          = {}
+
+    for spk_cfg in config["speakers"]:
+        key = _clip_key(spk_cfg["clips"])
+        if key in seen_keys:
+            canonical = seen_keys[key]
+            spk_alias[spk_cfg["id"]] = canonical
+            _progress(f"  Speaker {spk_cfg['id']} has identical clips to "
+                      f"{canonical} — skipping duplicate analysis")
+        else:
+            seen_keys[key] = spk_cfg["id"]
+            unique_spk_configs.append(spk_cfg)
+
     _progress("Loading VAD model...")
     model = load_model()
 
     _progress("Analyzing speakers (cross-channel dominance filter active)...")
     spk_results, duration = analyze_all_speakers(
-        speakers_config=config["speakers"],
+        speakers_config=unique_spk_configs,
         model=model,
         resolution=resolution,
         vad_threshold=vad_threshold,
@@ -250,10 +271,14 @@ def run(config_path: str) -> dict:
         min_phrase_sec=min_phrase_sec,
     )
 
-    speakers = [
-        Speaker(id=r["id"], activity=r["activity"])
-        for r in spk_results
-    ]
+    # Expand results back: give aliased speakers the same activity array
+    # as their canonical counterpart.
+    result_map = {r["id"]: r for r in spk_results}
+    speakers = []
+    for spk_cfg in config["speakers"]:
+        sid    = spk_cfg["id"]
+        source = result_map[spk_alias.get(sid, sid)]
+        speakers.append(Speaker(id=sid, activity=source["activity"]))
 
     cameras = []
     for cam_cfg in config["cameras"]:
