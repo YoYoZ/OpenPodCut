@@ -1108,10 +1108,18 @@ function runAnalyzer(configPath) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-// Load host script
-csInterface.evalScript(
-  `$.evalFile("${path.join(EXTENSION_ROOT, 'host/host.jsx').replace(/\\/g, '/')}")`
-);
+// Load host script — read via Node.js fs to avoid $.evalFile path issues
+// (spaces in "Application Support" on macOS can silently break $.evalFile)
+try {
+  const hostCode = fs.readFileSync(path.join(EXTENSION_ROOT, 'host', 'host.jsx'), 'utf8');
+  csInterface.evalScript(hostCode, (result) => {
+    if (result === 'EvalScript error.') {
+      log('⚠️ Host script failed to evaluate — check Premiere version compatibility', 'err');
+    }
+  });
+} catch (e) {
+  log('⚠️ Could not load host script: ' + e.message, 'err');
+}
 
 // Initial render
 renderSpeakerRows();
