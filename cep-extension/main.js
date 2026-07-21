@@ -556,17 +556,13 @@ async function runPremiereFlow(pipeline) {
 // ─── XML flow ─────────────────────────────────────────────────────────────────
 
 async function runXMLFlow(pipeline) {
-  const { analyzerResult, camerasForAnalyzer, speakersForAnalyzer, seqInfo } = pipeline;
+  const { analyzerResult, camerasForAnalyzer, speakersForAnalyzer, seqInfo, videoTrackClips } = pipeline;
 
   const silenceRemovals = analyzerResult.silence_removals || [];
   if (silenceRemovals.length > 0) {
     const totalRemoved = silenceRemovals.reduce((s, r) => s + (r.end - r.start), 0);
     log(`Silence removal: ${silenceRemovals.length} gap(s), ${totalRemoved.toFixed(1)}s removed`, 'ok');
   }
-
-  log('Reading video track clips…');
-  const videoTrackIndices = Array.from({ length: state.cameraCount }, (_, i) => i);
-  const videoTrackClips   = await callHost('getVideoTrackClips', JSON.stringify(videoTrackIndices));
 
   // Deduplicate cameras by index before XML generation
   const uniqueCamsForXML = [...new Map(camerasForAnalyzer.map(c => [c.index, c])).values()];
@@ -615,6 +611,42 @@ async function addChapterMarkersIfNeeded(pipeline) {
   } else {
     log('Chapter markers: no qualifying host segments found', 'info');
   }
+}
+
+// ─── Camera availability helpers ──────────────────────────────────────────────
+
+// Merge a list of [start,end] clip ranges into sorted non-overlapping windows.
+// Ranges separated by less than JOIN_GAP seconds are joined (ignores sub-frame
+// rounding noise so we don't report spurious micro-gaps).
+function mergeWindows(ranges) {
+  const JOIN_GAP = 0.1;
+  const sorted = ranges
+    .filter(r => r[1] > r[0])
+    .slice()
+    .sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const r of sorted) {
+    if (merged.length && r[0] - merged[merged.length - 1][1] <= JOIN_GAP) {
+      merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], r[1]);
+    } else {
+      merged.push([r[0], r[1]]);
+    }
+  }
+  return merged;
+}
+
+// Return the gaps (missing-footage ranges) within [0, duration] given the
+// merged availability windows. Ignores gaps smaller than JOIN_GAP.
+function findGaps(windows, duration) {
+  const JOIN_GAP = 0.1;
+  const gaps = [];
+  let cursor = 0;
+  for (const w of windows) {
+    if (w[0] - cursor > JOIN_GAP) gaps.push([cursor, w[0]]);
+    cursor = Math.max(cursor, w[1]);
+  }
+  if (duration - cursor > JOIN_GAP) gaps.push([cursor, duration]);
+  return gaps;
 }
 
 // ─── FCP7 XML generator ───────────────────────────────────────────────────────
@@ -758,12 +790,16 @@ function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName,
   const trackClipsMap = {};
   for (const tc of videoTrackClips) trackClipsMap[tc.index] = tc.clips || [];
 
-  function sourceClipAt(trackIdx, seqTime) {
+  // Strict coverage: return the clip that actually contains seqTime, or null.
+  // Unlike a fallback-to-last-clip lookup, this refuses to invent a source for
+  // a time that falls in a camera's recording gap (which would yield negative
+  // media in-points and break the Premiere import).
+  function sourceClipCovering(trackIdx, seqTime) {
     const clips = trackClipsMap[trackIdx] || [];
     for (const c of clips) {
       if (seqTime >= c.seqStart - 0.01 && seqTime < c.seqEnd + 0.01) return c;
     }
-    return clips[clips.length - 1] || null;
+    return null;
   }
 
   // Pre-register all files
@@ -782,13 +818,16 @@ function generateFCP7XML(cuts, cameras, videoTrackClips, fps, duration, seqName,
     const targeted = cam.index === 1 ? '1' : '0';
 
     const clipItems = cuts.flatMap(cut => {
-      const src = sourceClipAt(trackIdx, cut.start);
-      if (!src) return [];
-
-      const fi       = getFile(src.path, src.mediaEnd);
       const isActive = cut.camera === cam.index;
 
       return splitByRemovals(cut.start, cut.end).map(seg => {
+        // Resolve the source clip per-segment with strict coverage. If this
+        // camera has no footage at seg.srcStart (recording gap), emit nothing
+        // for this segment — the track simply has a gap there.
+        const src = sourceClipCovering(trackIdx, seg.srcStart);
+        if (!src) return '';
+
+        const fi          = getFile(src.path, src.mediaEnd);
         const seqStartFr  = toFr(remap(seg.srcStart));
         const seqEndFr    = toFr(remap(seg.srcEnd));
         if (seqEndFr <= seqStartFr) return '';
@@ -1015,19 +1054,48 @@ async function runAnalysisPipeline(logFn) {
     });
   }
 
+  // Read video track clips up front so the analyzer knows where each camera
+  // actually has footage. A camera restarted mid-recording leaves a gap; the
+  // analyzer uses these windows to avoid cutting to missing footage.
+  logFn('Reading video track clips…');
+  const videoTrackIndices = Array.from({ length: state.cameraCount }, (_, i) => i);
+  const videoTrackClips   = await callHost('getVideoTrackClips', JSON.stringify(videoTrackIndices));
+
+  // cameraIndex (1-based) → merged availability windows [[start,end], ...]
+  const camAvailability = {};
+  const seqDuration     = seqInfo.duration || 0;
+  for (const tc of videoTrackClips) {
+    const camIndex = tc.index + 1;
+    const windows  = mergeWindows((tc.clips || []).map(c => [c.seqStart, c.seqEnd]));
+    camAvailability[camIndex] = windows;
+
+    // Warn if the footage doesn't cover the whole sequence (has a gap).
+    const gaps = findGaps(windows, seqDuration);
+    if (gaps.length > 0) {
+      const g = gaps[0];
+      logFn(`⚠️ Camera ${camIndex} has a ${(g[1] - g[0]).toFixed(1)}s gap at `
+          + `${g[0].toFixed(1)}s — substituting other cameras`, 'err');
+    }
+  }
+
   // Build camera config — tandem selections expand into one entry per speaker
   const camerasForAnalyzer = [];
   for (let c = 1; c <= state.cameraCount; c++) {
     const sel = document.getElementById(`camera-speaker-${c}`);
     const val = sel.value;
+    // Only attach `available` when the camera actually has a gap — a full-coverage
+    // window array is equivalent to "always available" (null) for the analyzer.
+    const windows = camAvailability[c];
+    const hasGap  = windows && findGaps(windows, seqDuration).length > 0;
+    const avail   = hasGap ? windows : null;
     if (val === 'wide') {
-      camerasForAnalyzer.push({ index: c, speaker: null });
+      camerasForAnalyzer.push({ index: c, speaker: null, available: avail });
     } else if (val.includes('+')) {
       for (const spkId of val.split('+')) {
-        camerasForAnalyzer.push({ index: c, speaker: spkId });
+        camerasForAnalyzer.push({ index: c, speaker: spkId, available: avail });
       }
     } else {
-      camerasForAnalyzer.push({ index: c, speaker: val });
+      camerasForAnalyzer.push({ index: c, speaker: val, available: avail });
     }
   }
 
@@ -1071,7 +1139,7 @@ async function runAnalysisPipeline(logFn) {
   const analyzerResult = await runAnalyzer(configPath);
   logFn(`Analysis done — ${analyzerResult.cuts.length} cuts generated`, 'ok');
 
-  return { analyzerResult, speakersForAnalyzer, camerasForAnalyzer, seqInfo };
+  return { analyzerResult, speakersForAnalyzer, camerasForAnalyzer, seqInfo, videoTrackClips };
 }
 
 

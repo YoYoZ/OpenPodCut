@@ -38,6 +38,24 @@ class Speaker:
 class Camera:
     index: int               # 1-based, matches multicam track index in Premiere
     speaker_id: str | None   # None = wide/group shot
+    available: list | None = None  # list of [start,end] windows where footage
+                                   # exists; None = always available (no gaps)
+
+
+def cam_avail(cam: "Camera", t: float) -> bool:
+    """True if camera `cam` has footage at sequence time `t` (or has no gap info).
+
+    Windows are [start, end): the end is exclusive so the frame at which a clip
+    ends (= start of the gap) correctly reports as unavailable. A small epsilon
+    on the lower bound absorbs sub-frame rounding at a window's start.
+    """
+    av = cam.available
+    if not av:
+        return True
+    for win in av:
+        if win[0] - 1e-6 <= t < win[1]:
+            return True
+    return False
 
 
 @dataclass
@@ -80,11 +98,19 @@ def _generate_random_multicam_cuts(
     roll_base  = int((config.max_shot_sec or 8.0) / res)
 
     cam_indices = [c.index for c in cameras]
+    cam_by_idx  = {c.index: c for c in cameras}
     rng         = random.Random(42)
 
-    def pick_different(current_idx: int) -> int:
-        others = [i for i in cam_indices if i != current_idx]
-        return rng.choice(others) if others else current_idx
+    def avail_indices(t: float) -> list[int]:
+        return [i for i in cam_indices if cam_avail(cam_by_idx[i], t)]
+
+    def pick_different(current_idx: int, t: float) -> int:
+        # Only rotate to cameras that actually have footage at time t.
+        others = [i for i in avail_indices(t) if i != current_idx]
+        if others:
+            return rng.choice(others)
+        avail = avail_indices(t)
+        return rng.choice(avail) if avail else current_idx
 
     def next_roll_delay() -> int:
         jitter = max(1, int(roll_base * 0.4))
@@ -99,13 +125,14 @@ def _generate_random_multicam_cuts(
         combined |= arr[:n_frames]
 
     cuts:          list[Cut] = []
-    current_idx:   int       = rng.choice(cam_indices)
+    current_idx:   int       = rng.choice(avail_indices(0.0) or cam_indices)
     current_start: float     = 0.0
     cool_down:     int       = 0
     roll_timer:    int       = next_roll_delay()
     prev_speech:   bool      = False
 
     for f in range(n_frames):
+        t          = round(f * res, 3)
         speech_now = bool(combined[f])
         if cool_down > 0:
             cool_down -= 1
@@ -130,16 +157,24 @@ def _generate_random_multicam_cuts(
               and rng.random() < config.wide_frequency):
             do_cut = True
 
+        # Forced cut: current camera entered a gap — switch off it immediately
+        # (black is worse than an extra cut), if any other camera has footage.
+        if (not do_cut
+                and not cam_avail(cam_by_idx[current_idx], t)
+                and len([i for i in avail_indices(t) if i != current_idx]) > 0):
+            do_cut = True
+
         if do_cut and len(cam_indices) > 1:
-            t = round(f * res, 3)
-            cuts.append(Cut(
-                start=round(current_start, 3),
-                end=t,
-                camera_index=current_idx,
-            ))
-            current_idx   = pick_different(current_idx)
-            current_start = t
-            cool_down     = min_frames
+            new_idx = pick_different(current_idx, t)
+            if new_idx != current_idx:   # skip redundant same-camera boundaries
+                cuts.append(Cut(
+                    start=round(current_start, 3),
+                    end=t,
+                    camera_index=current_idx,
+                ))
+                current_idx   = new_idx
+                current_start = t
+                cool_down     = min_frames
 
         prev_speech = speech_now
 
@@ -224,6 +259,28 @@ def generate_cuts(
 
     def pick_wide() -> Camera:
         return wide_cameras[0] if wide_cameras else fallback_camera
+
+    # Substitute a camera that is in a recording gap at time `t` with the best
+    # available alternative, so cuts never land on missing footage.
+    def substitute_if_unavailable(desired: Camera, t: float,
+                                  active_ids: list[str]) -> Camera:
+        if cam_avail(desired, t):
+            return desired
+        # 1. another camera assigned to an active speaker that is available
+        for sid in active_ids:
+            for c in speaker_cameras.get(sid, []):
+                if c.index != desired.index and cam_avail(c, t):
+                    return c
+        # 2. an available wide camera
+        for c in wide_cameras:
+            if cam_avail(c, t):
+                return c
+        # 3. any available camera
+        for c in cameras:
+            if cam_avail(c, t):
+                return c
+        # 4. nothing available anywhere — unavoidable black, keep desired
+        return desired
 
     rng = random.Random(42)
 
@@ -341,9 +398,17 @@ def generate_cuts(
                     # shots entirely, stay on the current camera instead.
                     desired = pick_wide() if can_do_wide else current_cam
 
+        # ── Gap substitution ──────────────────────────────────────────────────
+        # If the chosen camera is in a recording gap, swap to an available one.
+        t = round(f * res, 3)
+        desired = substitute_if_unavailable(desired, t, active)
+
+        # Force a switch off the current camera the moment it enters a gap —
+        # bypass the cooldown, because holding on black is worse than an early cut.
+        current_in_gap = not cam_avail(current_cam, t)
+
         # ── Commit cut when desired changes and cooldown elapsed ──────────────
-        if desired.index != current_cam.index and cool_down == 0:
-            t = round(f * res, 3)
+        if desired.index != current_cam.index and (cool_down == 0 or current_in_gap):
             cuts.append(Cut(
                 start=round(current_start, 3),
                 end=t,

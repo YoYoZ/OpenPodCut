@@ -286,6 +286,7 @@ def run(config_path: str) -> dict:
         cameras.append(Camera(
             index=int(cam_cfg["index"]),
             speaker_id=speaker_id,
+            available=cam_cfg.get("available"),  # [[start,end],...] or None (no gaps)
         ))
 
     _progress("Generating cuts...")
