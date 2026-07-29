@@ -220,6 +220,7 @@ def run(config_path: str) -> dict:
         max_shot_sec   = float(settings.get("max_shot_sec",   8.0)),
         wide_frequency = float(settings.get("wide_frequency", 0.15)),
         cut_delay_sec  = float(settings.get("cut_delay_sec",  0.0)),
+        wide_style     = str(settings.get("wide_style", "random")),
         resolution     = resolution,
     )
 

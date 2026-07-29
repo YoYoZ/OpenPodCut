@@ -337,6 +337,21 @@ function getDominanceDb() {
   return parseFloat(active.dataset.val);
 }
 
+// ─── Wide-cam style pill group (Random / Reaction) ────────────────────────────
+
+document.getElementById('pills-wide-style').querySelectorAll('.pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('pills-wide-style').querySelectorAll('.pill')
+      .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+function getWideStyle() {
+  const active = document.querySelector('#pills-wide-style .pill.active');
+  return active ? active.dataset.val : 'random';
+}
+
 // ─── Max-shot checkbox toggle ─────────────────────────────────────────────────
 
 const maxShotCheckbox = document.getElementById('setting-max-shot-enabled');
@@ -364,6 +379,7 @@ function getPresetSettings() {
     maxShotEnabled: maxShotCheckbox.checked,
     maxShot:        maxShotInput.value,
     wideFreq:       wideRange.value,
+    wideStyle:      getWideStyle(),
     minPhrase:      document.getElementById('setting-min-phrase').value,
     cutDelay:       document.getElementById('setting-cut-delay').value,
     jCut:           document.getElementById('setting-jcut').value,
@@ -385,6 +401,11 @@ function applyPresetSettings(s) {
   maxShotInput.value       = s.maxShot        ?? 8.0;
   wideRange.value          = s.wideFreq       ?? 15;
   document.getElementById('wide-freq-val').textContent = (s.wideFreq ?? 15) + '%';
+  {
+    const ws = s.wideStyle ?? 'random';
+    const p  = document.querySelector(`#pills-wide-style .pill[data-val="${ws}"]`);
+    if (p) p.click();
+  }
   document.getElementById('setting-min-phrase').value  = s.minPhrase ?? 1.5;
   document.getElementById('setting-cut-delay').value   = s.cutDelay  ?? 0;
   document.getElementById('setting-jcut').value        = s.jCut      ?? 0;
@@ -1110,6 +1131,7 @@ async function runAnalysisPipeline(logFn) {
       min_shot_sec:       parseFloat(document.getElementById('setting-min-shot').value),
       max_shot_sec:       maxShotCheckbox.checked ? parseFloat(maxShotInput.value) : 0,
       wide_frequency:     parseInt(wideRange.value, 10) / 100,
+      wide_style:         getWideStyle(),
       min_phrase_sec:     parseFloat(document.getElementById('setting-min-phrase').value),
       cut_delay_sec:      parseFloat(document.getElementById('setting-cut-delay').value)
                         - parseFloat(document.getElementById('setting-jcut').value),
