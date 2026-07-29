@@ -352,20 +352,52 @@ function getWideStyle() {
   return active ? active.dataset.val : 'random';
 }
 
-// ─── Max-shot checkbox toggle ─────────────────────────────────────────────────
+// ─── Element refs ─────────────────────────────────────────────────────────────
 
-const maxShotCheckbox = document.getElementById('setting-max-shot-enabled');
 const maxShotInput    = document.getElementById('setting-max-shot');
 const silenceCheckbox = document.getElementById('setting-silence-enabled');
 const silenceInput    = document.getElementById('setting-min-silence');
 
-maxShotCheckbox.addEventListener('change', () => {
-  maxShotInput.disabled = !maxShotCheckbox.checked;
-});
-
 silenceCheckbox.addEventListener('change', () => {
   silenceInput.disabled = !silenceCheckbox.checked;
 });
+
+// ─── Wide-shot amount pill group (Off / Rare / Some / Often / Custom) ──────────
+
+// Each preset maps to an (interval, probability-per-check) pair. Effective rate
+// ≈ 60 × prob ÷ interval wide shots per minute.
+const WIDE_PRESETS = {
+  off:   { max_shot_sec: 0,  wide_frequency: 0.0  },
+  rare:  { max_shot_sec: 10, wide_frequency: 0.10 },
+  some:  { max_shot_sec: 8,  wide_frequency: 0.15 },
+  often: { max_shot_sec: 6,  wide_frequency: 0.28 },
+};
+
+document.getElementById('pills-wide-amount').querySelectorAll('.pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('pills-wide-amount').querySelectorAll('.pill')
+      .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('wide-custom-wrap').style.display =
+      btn.dataset.val === 'custom' ? 'block' : 'none';
+  });
+});
+
+function getWideAmount() {
+  const active = document.querySelector('#pills-wide-amount .pill.active');
+  return active ? active.dataset.val : 'some';
+}
+
+function getWideSettings() {
+  const amt = getWideAmount();
+  if (amt === 'custom') {
+    return {
+      max_shot_sec:   parseFloat(maxShotInput.value) || 0,
+      wide_frequency: parseInt(wideRange.value, 10) / 100,
+    };
+  }
+  return WIDE_PRESETS[amt] || WIDE_PRESETS.some;
+}
 
 // ─── Presets (localStorage) ───────────────────────────────────────────────────
 
@@ -376,7 +408,7 @@ function getPresetSettings() {
     speakerCount:   state.speakerCount,
     cameraCount:    state.cameraCount,
     minShot:        document.getElementById('setting-min-shot').value,
-    maxShotEnabled: maxShotCheckbox.checked,
+    wideAmount:     getWideAmount(),
     maxShot:        maxShotInput.value,
     wideFreq:       wideRange.value,
     wideStyle:      getWideStyle(),
@@ -396,11 +428,18 @@ function getPresetSettings() {
 
 function applyPresetSettings(s) {
   document.getElementById('setting-min-shot').value    = s.minShot   ?? 2.0;
-  maxShotCheckbox.checked  = s.maxShotEnabled ?? false;
-  maxShotInput.disabled    = !maxShotCheckbox.checked;
   maxShotInput.value       = s.maxShot        ?? 8.0;
   wideRange.value          = s.wideFreq       ?? 15;
   document.getElementById('wide-freq-val').textContent = (s.wideFreq ?? 15) + '%';
+
+  // Restore wide-shot amount. New presets carry `wideAmount`; older ones only
+  // had `maxShotEnabled`/`maxShot`/`wideFreq` → map disabled to Off, else Custom.
+  {
+    let amt = s.wideAmount;
+    if (!amt) amt = (s.maxShotEnabled === false) ? 'off' : 'custom';
+    const p = document.querySelector(`#pills-wide-amount .pill[data-val="${amt}"]`);
+    if (p) p.click();
+  }
   {
     const ws = s.wideStyle ?? 'random';
     const p  = document.querySelector(`#pills-wide-style .pill[data-val="${ws}"]`);
@@ -1129,8 +1168,8 @@ async function runAnalysisPipeline(logFn) {
     cameras:  camerasForAnalyzer,
     settings: {
       min_shot_sec:       parseFloat(document.getElementById('setting-min-shot').value),
-      max_shot_sec:       maxShotCheckbox.checked ? parseFloat(maxShotInput.value) : 0,
-      wide_frequency:     parseInt(wideRange.value, 10) / 100,
+      max_shot_sec:       getWideSettings().max_shot_sec,
+      wide_frequency:     getWideSettings().wide_frequency,
       wide_style:         getWideStyle(),
       min_phrase_sec:     parseFloat(document.getElementById('setting-min-phrase').value),
       cut_delay_sec:      parseFloat(document.getElementById('setting-cut-delay').value)

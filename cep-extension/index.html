@@ -455,20 +455,30 @@
   <!-- ── Wide Shot ───────────────────────────────────────────────── -->
   <div class="setting-group-label">Wide Shot</div>
 
-  <div class="setting-row">
-    <input type="checkbox" id="setting-max-shot-enabled" class="setting-toggle"
-           title="Enable periodic wide-shot roll checks">
-    <label for="setting-max-shot-enabled"
-           title="Average interval between wide-shot roll checks. Higher = rarer opportunities."
-           style="cursor:pointer;">Check every</label>
-    <input type="number" id="setting-max-shot" value="8.0" min="1" max="30" step="0.5" disabled>
-    <span class="unit">sec</span>
+  <div style="margin-bottom:7px">
+    <div style="font-size:11px;color:#aaa;margin-bottom:5px"
+         title="How often the app breaks to a wide / group shot. In all-wide Random mode this sets how often cameras switch. Off disables it entirely.">
+      Wide shots
+    </div>
+    <div class="pill-group" id="pills-wide-amount">
+      <button class="pill"        data-val="off">Off</button>
+      <button class="pill"        data-val="rare">Rare</button>
+      <button class="pill active" data-val="some">Some</button>
+      <button class="pill"        data-val="often">Often</button>
+      <button class="pill"        data-val="custom">Custom</button>
+    </div>
   </div>
-
-  <div class="setting-row">
-    <label title="Probability of inserting a wide shot each time the timer fires.">Frequency</label>
-    <input type="range" id="setting-wide-freq" min="0" max="40" value="15">
-    <span class="range-val" id="wide-freq-val">15%</span>
+  <div id="wide-custom-wrap" style="display:none;margin-top:-3px">
+    <div class="setting-row">
+      <label title="Average interval between wide-shot roll checks. Higher = rarer opportunities.">Check every</label>
+      <input type="number" id="setting-max-shot" value="8.0" min="1" max="30" step="0.5">
+      <span class="unit">sec</span>
+    </div>
+    <div class="setting-row">
+      <label title="Probability of inserting a wide shot each time the timer fires.">Chance per check</label>
+      <input type="range" id="setting-wide-freq" min="0" max="40" value="15">
+      <span class="range-val" id="wide-freq-val">15%</span>
+    </div>
   </div>
 
   <div class="setting-row" style="margin-top:2px">
