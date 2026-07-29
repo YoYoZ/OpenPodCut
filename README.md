@@ -15,6 +15,8 @@ OpenPodCut watches the audio on each speaker's track, detects when they're talki
 - Add chapter markers wherever the host speaks for an extended stretch
 - Apply L-cuts and J-cuts to soften hard edits
 - Handle tandem shots — one camera covering two speakers simultaneously
+- Two "all-wide" modes when every camera sees everyone: **Random** (periodic switching) and **Reaction** (hold on speech, cut on the pause)
+- Survive camera recording gaps — if a camera was restarted mid-shoot, it automatically holds another angle over the missing footage
 - Output cuts directly into the active sequence **or** export an FCP7 XML for faster processing on long recordings
 
 ---
@@ -22,7 +24,7 @@ OpenPodCut watches the audio on each speaker's track, detects when they're talki
 ## Requirements
 
 - Adobe Premiere Pro 2019 or later (CC 13.0+)
-- Windows 10 / 11
+- Windows 10 / 11 or macOS (Apple Silicon / Intel)
 - ~300 MB free disk space (PyTorch is bundled in the analyzer)
 - No Python runtime needed after installation
 
@@ -78,8 +80,6 @@ If one camera covers two speakers (e.g. a two-shot of A and B), assign that came
 | Setting | Default | Description |
 |---|---|---|
 | Min shot duration | 2 s | Post-cut cooldown — blocks another cut for this long after switching cameras. Prevents rapid ping-pong. |
-| Max shot duration | 8 s | Mean interval between wide-shot roll checks. Set to 0 to disable wide shots. |
-| Wide shot frequency | 15% | Probability per roll that a wide shot is inserted. |
 | L-cut — linger | 0 s | Stay on the outgoing speaker this many seconds past the cut point before switching. |
 | J-cut — lead in | 0 s | Show the incoming speaker this many seconds before they start talking. |
 
@@ -87,33 +87,29 @@ If one camera covers two speakers (e.g. a two-shot of A and B), assign that came
 
 | Setting | Default | Description |
 |---|---|---|
-| Max shot duration | 8 s | (Same as above — controls roll interval.) |
-| Wide shot frequency | 15% | (Same as above.) |
+| Wide shots | Some | How often the edit breaks to a wide/group shot: **Off / Rare / Some / Often / Custom**. Custom exposes the raw roll interval (*Check every*) and per-check probability (*Chance per check*). |
+| All-wide style | Random | Only applies when *every* camera is set to Wide/Group shot. **Random** — switch cameras periodically during speech. **Reaction** — hold the shot while anyone talks, cut to another camera on a pause. |
 
 ### Detection
 
 | Setting | Default | Description |
 |---|---|---|
-| VAD threshold | 0.5 | Silero-VAD speech probability cutoff (0–1). Higher = less sensitive. |
-| Dominance filter | 12 dB | Suppress a speaker's VAD if their mic is this many dB below the loudest channel. Eliminates mic bleed. |
-| Min phrase | 0.3 s | Ignore speech bursts shorter than this (filters out clicks and false positives). |
+| Min phrase duration | 1.5 s | Ignore speech bursts shorter than this (filters out "hmm", breaths, mic clicks). |
+| Mic bleed filter | Medium | Cross-channel dominance filter that suppresses microphone bleed: **Off / Subtle / Medium / Lav / Custom**. Lower dB = more aggressive; **Lav** (5 dB) is tuned for lavalier mics with tight bleed. |
 
 ### Cleanup
 
 | Setting | Default | Description |
 |---|---|---|
-| Silence removal | off | *(XML mode only)* Remove gaps between speakers longer than the threshold. |
-| Min silence | 1.5 s | Minimum gap length to remove. |
-| Snap to zero-crossing | on | Nudge each cut to the nearest audio zero-crossing to reduce pops. |
+| Snap cuts to zero crossing | off | Nudge each cut ±50 ms to the nearest audio zero-crossing to reduce pops. |
+| Remove silences | off | *(XML mode only)* Ripple-remove stretches where everyone is silent longer than the threshold (default 2 s). |
 
 ### Finishing
 
 | Setting | Default | Description |
 |---|---|---|
-| Chapter markers | off | Add sequence markers when the host (★) speaks continuously for `chapter min` seconds. |
-| Chapter min | 60 s | Minimum continuous host speech to trigger a chapter marker. |
-| Punch-in zoom | off | *(Premiere mode only)* Scale clips at cut points to simulate a zoom. |
-| Zoom % | 110% | Scale factor for punch-in zoom. |
+| Punch-in zoom | 0% | *(Premiere mode only)* Scale enabled clips up by this percentage to punch in and mask cuts. 0 = off. |
+| Chapter if host speaks ≥ | 10 s | Add a sequence marker whenever the host (★) speaks continuously for at least this long. |
 
 ---
 
