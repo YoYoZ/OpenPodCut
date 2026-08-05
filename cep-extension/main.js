@@ -18,13 +18,25 @@ const { execFile } = require('child_process');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-// On Windows, CEP's pathname starts with /C:/... — strip the leading slash before the drive letter.
-// On macOS it's a normal Unix path, so no transformation needed.
 const isWin = process.platform === 'win32';
-const rawPathname = decodeURIComponent(window.location.pathname);
-const EXTENSION_ROOT = path.dirname(
-  isWin ? rawPathname.replace(/^\/([A-Za-z]:)/, '$1') : rawPathname
-);
+
+// Resolve the extension's root folder. Prefer CEP's official API — it returns
+// the correct native path on both platforms, including macOS where the
+// extension lives under "~/Library/Application Support/…" (a path with a space
+// that URL-encoding of window.location.pathname mangled, breaking host.jsx
+// loading on Mac). Fall back to deriving from window.location if unavailable.
+function resolveExtensionRoot() {
+  try {
+    const p = csInterface.getSystemPath(SystemPath.EXTENSION);
+    if (p) return p;
+  } catch (e) { /* SystemPath unavailable — fall through */ }
+  const rawPathname = decodeURIComponent(window.location.pathname);
+  return path.dirname(
+    isWin ? rawPathname.replace(/^\/([A-Za-z]:)/, '$1') : rawPathname
+  );
+}
+
+const EXTENSION_ROOT = resolveExtensionRoot();
 const ANALYZER_EXE = path.join(EXTENSION_ROOT, 'bin', 'analyzer', isWin ? 'analyzer.exe' : 'analyzer');
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -1237,17 +1249,39 @@ function runAnalyzer(configPath) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-// Load host script — read via Node.js fs to avoid $.evalFile path issues
-// (spaces in "Application Support" on macOS can silently break $.evalFile)
-try {
-  const hostCode = fs.readFileSync(path.join(EXTENSION_ROOT, 'host', 'host.jsx'), 'utf8');
+// Load the ExtendScript host. Read the file via Node fs and eval its contents,
+// so we don't rely on $.evalFile resolving the path inside ExtendScript. The
+// track auto-load runs only AFTER the host confirms it loaded — otherwise its
+// functions may be undefined and every callHost returns "EvalScript error.".
+function autoLoadTracks() {
+  callHost('getAudioTrackList')
+    .then(tracks => {
+      state.audioTracks = tracks;
+      renderSpeakerRows();
+      if (tracks.length > 0) log(`Loaded ${tracks.length} audio tracks`, 'ok');
+    })
+    .catch(() => { /* sequence may not be open yet — that's fine */ });
+}
+
+function loadHostScriptAndInit() {
+  const hostPath = path.join(EXTENSION_ROOT, 'host', 'host.jsx');
+  let hostCode;
+  try {
+    hostCode = fs.readFileSync(hostPath, 'utf8');
+  } catch (e) {
+    log('❌ Could not read host script at:', 'err');
+    log('   ' + hostPath, 'err');
+    log('   ' + e.message, 'err');
+    return;
+  }
   csInterface.evalScript(hostCode, (result) => {
     if (result === 'EvalScript error.') {
-      log('⚠️ Host script failed to evaluate — check Premiere version compatibility', 'err');
+      log('❌ Host script failed to evaluate in Premiere.', 'err');
+      log('   Loaded from: ' + hostPath, 'err');
+      return;
     }
+    autoLoadTracks();
   });
-} catch (e) {
-  log('⚠️ Could not load host script: ' + e.message, 'err');
 }
 
 // Initial render
@@ -1255,15 +1289,4 @@ renderSpeakerRows();
 renderCameraRows();
 updateModeState();
 
-// Auto-load tracks
-callHost('getAudioTrackList')
-  .then(tracks => {
-    state.audioTracks = tracks;
-    renderSpeakerRows();
-    if (tracks.length > 0) {
-      log(`Loaded ${tracks.length} audio tracks`, 'ok');
-    }
-  })
-  .catch(() => {
-    // Sequence might not be open yet — that's fine
-  });
+loadHostScriptAndInit();
